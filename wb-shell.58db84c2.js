@@ -22,6 +22,9 @@
 
 
 
+
+
+
 (function () {
   'use strict';
   var CFG = window.WB_CFG || {};
@@ -212,7 +215,10 @@
         (Array.isArray(a) ? a : []).forEach(function (x) {
           if (x && x.type_id) et[x.type_id] = { name: String(x.display_name || x.type_id), color: String(x.color || '#78838F') };
         });
-        if (CHOKU) {
+        if (CHOKU && CFG.wbapi === true) {
+          obi('<b>書けるのは、始める・止める・完了・着席・退席・タイムログと、新しい画面の番になった操作です。</b>'
+            + 'まだの操作は「古い画面で」と出ます。予定（カレンダー）はまだ出ません。', '#E8F0FE', true);
+        } else if (CHOKU) {
           obi('<b>いま書けるのは、始める・止める・完了・着席・退席・タイムログ（直す・足す）だけです。</b>'
             + 'ほかの書き込みと予定（カレンダー）は、まだ使えません（古い画面で操作してください）。', '#E8F0FE', true);
         } else {
@@ -344,6 +350,12 @@
         if (!j) throw new Error('サーバの返事が読めません（' + res.status + '）');
         if (j.ok) return j.r === undefined ? null : j.r;
 
+
+        if (fn === 'chatworkDone' && (j.code === 'kirikae' || j.code === 'mada')) {
+          obi(esc(CW_DONE), '#FFF4D6', true);
+          throw new Error(CW_DONE);
+        }
+
         if (j.code === 'mada') { furuiObi(fn); throw new Error(furuiBun(fn)); }
         if (j.code === 'kirikae' || j.code === 'konzatsu') { furuiObi(fn, j.error); throw new Error(j.error || furuiBun(fn)); }
         throw new Error(j.error || ('失敗しました（' + res.status + '）'));
@@ -399,6 +411,9 @@
           });
         }).then(owari('miru-yomu'), dame('miru-yomu'));
       }
+
+
+      if (CFG.wbapi === true && aru(WBAPI_NA, fn)) return narabu(function () { return wbApi(fn, args); });
 
       if (CHOKU && aru(W1_NA, fn)) {
         var bun2 = nijiDai() ? NIJI_KOTOWARI : CHOKU_OCHI;
