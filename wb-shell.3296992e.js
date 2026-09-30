@@ -39,6 +39,13 @@
   var MIRU = CFG.miru === true;
   var MIRU_BUN = 'まだ使えません（古い画面で操作してください）。この新しい画面は、いまは見るだけ版です。';
   var MIRU_YOTEI = 'まだ使えません（予定は古い画面で見てください）。この新しい画面は、いまは見るだけ版です。';
+
+
+
+  var CHOKU = MIRU && CFG.choku === true;
+  var NIJI_KOTOWARI = '2時台は古い画面で操作してください（日本時間の2時台は締めの時間なので、新しい画面では書けません）。';
+  var CHOKU_OCHI = 'この操作は、まだ新しい画面ではできません（古い画面で操作してください）。通信が切れていたときは、もう一度押してください。';
+  var CW_DONE = 'Chatwork のタスクの完了は、まだ新しい画面から送れません。Chatwork で完了にしてください（WorksBoard の完了は済んでいます）。';
   var naoseru = [];
   var kiroku = [];
   var SHELL = window.WBSHELL = { naoseru: naoseru, kiroku: kiroku, ver: CFG.ver || '' };
@@ -205,11 +212,25 @@
         (Array.isArray(a) ? a : []).forEach(function (x) {
           if (x && x.type_id) et[x.type_id] = { name: String(x.display_name || x.type_id), color: String(x.color || '#78838F') };
         });
-        obi('<b>見るだけ版です。</b>記録・タスク・着席・予定の書き込みは、まだ使えません（古い画面で操作してください）。'
-          + '予定（カレンダー）もまだ出ません。', '#E8F0FE', true);
-        return { etypes: et, links: [], links2: { admin: false, meet: '', tobila: '', tobilaLinks: [], idleMin: 30, sheets: [] },
-                 taskOrder: [], kAdd: '', hol: {}, custBase: '', pjBase: '', cal: 'off', ver: '', runCols: 14,
-                 naoseru: false, iremono: 'on', miru: true };
+        if (CHOKU) {
+          obi('<b>いま書けるのは、始める・止める・完了・着席・退席・タイムログ（直す・足す）だけです。</b>'
+            + 'ほかの書き込みと予定（カレンダー）は、まだ使えません（古い画面で操作してください）。', '#E8F0FE', true);
+        } else {
+          obi('<b>見るだけ版です。</b>記録・タスク・着席・予定の書き込みは、まだ使えません（古い画面で操作してください）。'
+            + '予定（カレンダー）もまだ出ません。', '#E8F0FE', true);
+        }
+        var so0 = { etypes: et, links: [], links2: { admin: false, meet: '', tobila: '', tobilaLinks: [], idleMin: 30, sheets: [] },
+                    taskOrder: [], kAdd: '', hol: {}, custBase: '', pjBase: '', cal: 'off', ver: '', runCols: 14,
+                    naoseru: false, iremono: 'on', miru: true };
+        if (CHOKU) {
+
+          so0.chokukaki = 'on';
+          so0.kaki = { tasuku: 'on', jikko: 'on', jotai: 'on', kintai: 'on', taskYomi: 'on', kin: 'on', jotaiYomi: 'on', chaku: 'on' };
+          so0.kubun = 'on';
+          so0.chokuchaku = 'on';
+          so0.chokulog = 'on';
+        }
+        return so0;
       });
     });
   }
@@ -231,11 +252,16 @@
           return (MIRU ? miruSoe(s) : rpc(s, 'wb_watashimono', {})).then(function (so) {
             so = (so && typeof so === 'object') ? so : {};
             if (so.gasUrl) { try { localStorage.setItem('WB_GAS_URL', String(so.gasUrl)); } catch (e) {} }
-            if (so.iremono !== 'on') {
+            if (so.iremono !== 'on' && !MIRU) {
+
+
               var t = Array.isArray(so.iremonoTarinai) && so.iremonoTarinai.length ? '（足りない印：' + esc(so.iremonoTarinai.join('・')) + '）' : '';
-              obi('まだ新しい画面の番ではありません' + t + '。いつもの画面を使ってください。' + furuiGamen());
+              MIRU = true;
+              ['chokukaki', 'chokuchaku', 'chokulog', 'kaki', 'kubun'].forEach(function (k) { delete so[k]; });
+              so.cal = 'off';
+              so.naoseru = false;
+              obi('<b>まだ新しい画面の番ではありません' + t + '。</b>見るだけです。書き込みは、いつもの画面で操作してください。' + furuiGamen(), '#E8F0FE', true);
               kiroku.push({ fn: 'sbWatashimono', michi: 'iremono-off', ms: 0 });
-              return MATSU;
             }
             so.app = pageUrl();
             if (!so.ver) { try { so.ver = APP_VER; } catch (e) {} }
@@ -372,6 +398,18 @@
             return out;
           });
         }).then(owari('miru-yomu'), dame('miru-yomu'));
+      }
+
+      if (CHOKU && aru(W1_NA, fn)) {
+        var bun2 = nijiDai() ? NIJI_KOTOWARI : CHOKU_OCHI;
+        kiroku.push({ fn: fn, michi: 'choku-ochi', ms: 0, ng: true });
+        obi(esc(bun2), '#FFF4D6', true);
+        return Promise.reject(new Error(bun2));
+      }
+      if (CHOKU && fn === 'chatworkDone') {
+        kiroku.push({ fn: fn, michi: 'miru-kotowari', ms: 0, ng: true });
+        obi(esc(CW_DONE), '#FFF4D6', true);
+        return Promise.reject(new Error(CW_DONE));
       }
       if (fn === 'calAikotoba' || (!aru(LOCAL_NA, fn) && !Object.prototype.hasOwnProperty.call(YAMERU, fn))) {
         if (aru(R2_NA, fn)) { kiroku.push({ fn: fn, michi: 'miru-kotowari', ms: 0, ng: true }); return Promise.reject(new Error(MIRU_YOTEI)); }
