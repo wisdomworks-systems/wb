@@ -25,6 +25,7 @@
 
 
 
+
 (function () {
   'use strict';
   var CFG = window.WB_CFG || {};
@@ -74,8 +75,12 @@
     return { parameter: one, parameters: all, hash: String(location.hash || '').replace(/^#/, ''), authErr: err, authAri: authAri };
   })();
 
+  var SOTO = loc0.parameter.ver ? 'ver' : (loc0.parameter.add ? 'add' : '');
+
 
   function obi(html, iro, tojiru) {
+
+    if (SOTO) return sotoKaku(iro === '#FDE2E1' ? '#FEF3F2' : '#FFF4D6', '<div style="font-size:14px;line-height:1.7">' + html + '</div>');
     var d = document.getElementById('wbShellObi');
     if (!d) {
       d = document.createElement('div');
@@ -174,7 +179,7 @@
       return MATSU;
     });
   }
-  var hajime = loginMade();
+  var hajime = (SOTO === 'ver') ? MATSU : loginMade();
 
 
   function rpc(s, namae, hikisuu) {
@@ -493,6 +498,7 @@
 
   var mitaAt = 0;
   function hanWoMiru() {
+    if (SOTO) return;
     if (!CFG.ver || !window.fetch || Date.now() - mitaAt < 10 * 60 * 1000) return;
     mitaAt = Date.now();
     fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (v) {
@@ -503,4 +509,141 @@
   }
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') hanWoMiru(); });
   SHELL.hajime = hajime;
+
+
+
+
+
+
+
+  var SOTO_MS = CFG.sotoTojiruMs || 4000;
+  function sotoKaku(iro, html) {
+    var d = document.getElementById('wbSoto');
+    if (!d) {
+      var st = document.createElement('style');
+      st.textContent = 'body{display:none!important}'
+        + '#wbSoto{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;overflow:auto;font-family:sans-serif;color:#241D1A;'
+        + 'display:flex;align-items:center;justify-content:center}'
+        + '#wbSoto .w{max-width:520px;width:100%;padding:18px 16px;box-sizing:border-box}'
+        + '#wbSoto button.p{display:block;width:100%;text-align:left;padding:13px 16px;margin:6px 0;border:1px solid #D7DEE7;'
+        + 'border-radius:9px;background:#fff;color:#241D1A;font-size:15px;font-weight:600;cursor:pointer}';
+      document.documentElement.appendChild(st);
+      d = document.createElement('div');
+      d.id = 'wbSoto';
+      d.innerHTML = '<div class="w"></div>';
+      document.documentElement.appendChild(d);
+    }
+    d.style.background = iro || '#F7F8FA';
+    d.firstChild.innerHTML = html
+      + '<div style="font-size:11px;color:#C6CCD3;margin-top:14px;text-align:center">WorksBoard ' + esc(CFG.ver || '') + '</div>';
+    return d;
+  }
+
+  function uketotta(p) {
+    var ks = Object.keys(p || {});
+    if (!ks.length) return '';
+    return '<div style="font-size:11px;color:#98A2AD;margin-top:14px;line-height:1.7;text-align:left;border-top:1px solid #E4E7EC;padding-top:10px">'
+      + '受け取った内容<br>' + ks.map(function (k) { return esc(k) + ' = ' + esc(String(p[k]).slice(0, 60)); }).join('<br>') + '</div>';
+  }
+
+  function furuiTouroku(p, code) {
+    if (code !== 'kirikae' && code !== 'mada') return '';
+    var u = '';
+    try { u = localStorage.getItem('WB_GAS_URL') || ''; } catch (e) {}
+    if (!u) return '';
+    return '<div style="margin-top:12px;font-size:13px"><a href="' + esc(u + '?' + new URLSearchParams(p).toString()) + '">古い WorksBoard で登録する</a></div>';
+  }
+  function sotoYobu(p, nidome) {
+    var t0 = Date.now();
+    return loginMade().then(function (s) {
+      return fetch(CFG.wbApi, {
+        method: 'POST',
+        headers: { 'apikey': CFG.anon, 'Authorization': 'Bearer ' + s.token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fn: 'quickAdd', args: [p], ver: CFG.ver || '' })
+      }).then(function (res) {
+        if (res.status === 401 && !nidome && AUTH && AUTH.refresh) return AUTH.refresh().then(function () { return sotoYobu(p, true); });
+        return res.json().then(null, function () { return null; }).then(function (j) {
+          kiroku.push({ fn: 'quickAdd', michi: 'soto', ms: Date.now() - t0, status: res.status, code: (j && j.code) || '' });
+          if (j && j.ok) return j.r || {};
+          return { kekka: 'kotowari', code: (j && j.code) || '', msg: (j && j.error) || ('サーバの返事が読めません（' + res.status + '）') };
+        });
+      }, function () {
+        return { kekka: 'kotowari', code: 'tsunagaranai', msg: 'つながりません（回線か、サーバが止まっています）。少し待って、もう一度開いてください。' };
+      });
+    });
+  }
+  function sotoTojiru() {
+    setTimeout(function () {
+      try { var o = window.opener; if (o) o.postMessage({ wbClose: 1 }, '*'); } catch (e) {}
+      try { window.close(); } catch (e) {}
+      setTimeout(function () {
+        var d = document.getElementById('wbSoto');
+        if (d && !window.closed) {
+          d.firstChild.insertAdjacentHTML('beforeend',
+            '<div style="font-size:12px;color:#6B747E;margin-top:10px;text-align:center">この画面は閉じてかまいません。</div>');
+        }
+      }, 500);
+    }, SOTO_MS);
+  }
+  function sotoKekka(r, p) {
+    r = r || {};
+    if (r.kekka === 'erabu') return sotoErabu(r, p);
+    var ok = r.kekka === 'touroku' || r.kekka === 'sudeni';
+    sotoKaku(ok ? '#F2FAF6' : '#FEF3F2',
+      '<div style="text-align:center"><div id="wbSotoBun" style="font-size:19px;font-weight:700;color:' + (ok ? '#0E7A55' : '#B42318') + '">'
+      + (ok ? '✓ ' : '⚠ ') + esc(r.msg || '登録できませんでした') + '</div>'
+      + '<div style="font-size:12px;color:#6B747E;margin-top:8px;line-height:1.6">' + esc(p.add || '') + '</div>'
+      + (ok ? '' : furuiTouroku(p, r.code)) + uketotta(p) + '</div>');
+    if (ok) sotoTojiru();
+  }
+
+  function erabuP(p, email) {
+    var q = { add: String(p.add || '') };
+    if (p.url) q.url = String(p.url);
+    ['cust', 'kno', 'day', 'tm'].forEach(function (k) { var v = String(p[k] || '').trim(); if (v) q[k] = v; });
+    q.to = email;
+    return q;
+  }
+  function sotoErabu(r, p) {
+    var hito = r.hito || [];
+    var d = sotoKaku('#FFFAEB',
+      '<div style="font-size:16px;font-weight:700;color:#B54708">⚠ 担当者が決まっていません</div>'
+      + (r.note ? '<div style="font-size:13px;color:#B54708;margin-top:6px">' + esc(r.note) + '</div>' : '')
+      + '<div style="font-size:13px;color:#5B6570;margin-top:12px;line-height:1.7;background:#fff;border:1px solid #FEDF89;border-radius:8px;padding:10px 12px">'
+      + esc(p.add || '') + '</div>'
+      + '<div style="font-size:14px;font-weight:600;margin:18px 0 4px">だれのタスクにしますか？</div>'
+      + hito.map(function (h, i) { return '<button type="button" class="p" data-i="' + i + '">' + esc(h.na || h.email) + '</button>'; }).join('')
+      + '<div style="font-size:12px;color:#98A2AD;margin-top:18px;line-height:1.8;border-top:1px solid #FEDF89;padding-top:12px">'
+      + 'メールワイズのリンクの末尾に <b>&amp;to=（担当者）</b> を足すと、この画面は出なくなり、そのまま登録されます。'
+      + '<br>氏名（寺田 亜未絵）でも、メールアドレスでも指定できます。</div>' + uketotta(p));
+    var bs = d.querySelectorAll('button.p');
+    Array.prototype.forEach.call(bs, function (b) {
+      b.onclick = function () {
+        Array.prototype.forEach.call(bs, function (x) { x.disabled = true; });
+        sotoTouroku(erabuP(p, hito[Number(b.getAttribute('data-i'))].email));
+      };
+    });
+  }
+  function sotoTouroku(p) {
+    sotoKaku('#F7F8FA', '<div style="text-align:center;font-size:15px">WorksBoard に登録しています…'
+      + '<div style="font-size:12px;color:#6B747E;margin-top:8px">' + esc(p.add || '') + '</div></div>');
+    return sotoYobu(p).then(function (r) { sotoKekka(r, p); },
+      function (e) { sotoKekka({ kekka: 'kotowari', msg: String((e && e.message) || e) }, p); });
+  }
+  if (SOTO) {
+
+    var shizuka = new Proxy(function () {}, {
+      get: function (_, na) { return na === 'then' ? undefined : shizuka; },
+      apply: function () { return shizuka; }
+    });
+    window.google.script = { run: shizuka, url: { getLocation: function () {} } };
+    if (SOTO === 'ver') {
+      sotoKaku('#F2FAF6', '<div style="text-align:center"><div style="font-size:13px;color:#5B6570">このURLが返している版</div>'
+        + '<div style="font-size:26px;font-weight:700;color:#0E7A55;margin-top:8px">' + esc(CFG.ver || '（不明）') + '</div>'
+        + '<div style="font-size:12px;color:#98A2AD;margin-top:16px;line-height:1.8">新しい WorksBoard（Supabase）です。<br>'
+        + 'この画面が出れば、送り先は新しい WorksBoard になっています。</div></div>');
+    } else {
+      sotoTouroku(JSON.parse(JSON.stringify(loc0.parameter)));
+    }
+  }
 })();
