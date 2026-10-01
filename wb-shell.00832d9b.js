@@ -79,6 +79,7 @@
 
 
   function obi(html, iro, tojiru) {
+    html = kae(html);
 
     if (SOTO) return sotoKaku(iro === '#FDE2E1' ? '#FEF3F2' : '#FFF4D6', '<div style="font-size:14px;line-height:1.7">' + html + '</div>');
     var d = document.getElementById('wbShellObi');
@@ -102,6 +103,29 @@
     return u ? ' <a href="' + esc(u) + '" target="_blank" rel="noopener">いつもの画面（古い URL）を開く</a>' : '';
   }
   function namaeOf(fn) { return NAMAE[fn] || fn; }
+
+
+
+  function furuiAri() { try { return !!localStorage.getItem('WB_GAS_URL'); } catch (e) { return false; } }
+  var KAE = [
+    [/3時からもう一度押すか、古い画面（いつもの WorksBoard）から操作してください。/g, '3時からもう一度押してください。'],
+    [/2時台は古い画面で操作してください（日本時間の2時台は締めの時間なので、新しい画面では書けません）。/g,
+      '日本時間の2時台は締めの時間なので書けません。3時からもう一度押してください。'],
+    [/まだ新しい画面では使えません。/g, 'いまは止めてあります。'],
+    [/まだ新しい画面でできません。/g, 'いまは使えません。'],
+    [/古い画面（いつもの WorksBoard）から操作してください。/g, '管理者に知らせてください。'],
+    [/いつもの画面（古い URL）で操作してください。/g, '管理者に知らせてください。'],
+    [/書き込みは、いつもの画面で操作してください。/g, '書き込みは、いまは使えません。管理者に知らせてください。'],
+    [/いつもの画面で操作してください。/g, '管理者に知らせてください。'],
+    [/（古い画面で操作してください）/g, ''],
+    [/（予定は古い画面で見てください）/g, '']
+  ];
+  function kae(t) {
+    t = String(t == null ? '' : t);
+    if (furuiAri()) return t;
+    KAE.forEach(function (x) { t = t.replace(x[0], x[1]); });
+    return t;
+  }
 
 
   function appNoNaka() {
@@ -262,7 +286,8 @@
         return p.then(function (s) {
           return (MIRU ? miruSoe(s) : rpc(s, 'wb_watashimono', {})).then(function (so) {
             so = (so && typeof so === 'object') ? so : {};
-            if (so.gasUrl) { try { localStorage.setItem('WB_GAS_URL', String(so.gasUrl)); } catch (e) {} }
+
+            try { if (so.gasUrl) localStorage.setItem('WB_GAS_URL', String(so.gasUrl)); else if (!MIRU) localStorage.removeItem('WB_GAS_URL'); } catch (e) {}
             if (so.iremono !== 'on' && !MIRU) {
 
 
@@ -317,7 +342,7 @@
 
 
   function furuiBun(fn) {
-    return 'この操作（' + namaeOf(fn) + '）は、まだ新しい画面でできません。いつもの画面（古い URL）で操作してください。';
+    return kae('この操作（' + namaeOf(fn) + '）は、まだ新しい画面でできません。いつもの画面（古い URL）で操作してください。');
   }
   function furuiObi(fn, bun) {
     if (aru(SHIZUKA, fn)) return;
@@ -362,8 +387,8 @@
         }
 
         if (j.code === 'mada') { furuiObi(fn); throw new Error(furuiBun(fn)); }
-        if (j.code === 'kirikae' || j.code === 'konzatsu') { furuiObi(fn, j.error); throw new Error(j.error || furuiBun(fn)); }
-        throw new Error(j.error || ('失敗しました（' + res.status + '）'));
+        if (j.code === 'kirikae' || j.code === 'konzatsu') { furuiObi(fn, j.error); throw new Error(kae(j.error) || furuiBun(fn)); }
+        throw new Error(kae(j.error) || ('失敗しました（' + res.status + '）'));
       });
     });
   }
@@ -452,7 +477,7 @@
     if (aru(CHOKU_NA, fn)) {
       kiroku.push({ fn: fn, michi: 'choku-yobi', ms: 0, ng: true });
       if (aru(W1_NA, fn)) {
-        var bun = nijiDai() ? NIJI_BUN : CHOKU_W;
+        var bun = kae(nijiDai() ? NIJI_BUN : CHOKU_W);
         obi(esc(bun).replace(/\n/g, '<br>') + furuiGamen(), '#FDE2E1', true);
         return Promise.reject(new Error(bun));
       }
@@ -464,7 +489,7 @@
       return Promise.reject(new Error(furuiBun(fn)));
     }
     kiroku.push({ fn: fn, michi: 'shiranai', ms: 0, ng: true });
-    return Promise.reject(new Error('この画面が知らない操作です（' + String(fn).slice(0, 40) + '）。いつもの画面で操作してください。'));
+    return Promise.reject(new Error(kae('この画面が知らない操作です（' + String(fn).slice(0, 40) + '）。いつもの画面で操作してください。')));
   }
   SHELL.yobu = yobu;
 
@@ -591,7 +616,7 @@
     var ok = r.kekka === 'touroku' || r.kekka === 'sudeni';
     sotoKaku(ok ? '#F2FAF6' : '#FEF3F2',
       '<div style="text-align:center"><div id="wbSotoBun" style="font-size:19px;font-weight:700;color:' + (ok ? '#0E7A55' : '#B42318') + '">'
-      + (ok ? '✓ ' : '⚠ ') + esc(r.msg || '登録できませんでした') + '</div>'
+      + (ok ? '✓ ' : '⚠ ') + esc(kae(r.msg || '登録できませんでした')) + '</div>'
       + '<div style="font-size:12px;color:#6B747E;margin-top:8px;line-height:1.6">' + esc(p.add || '') + '</div>'
       + (ok ? '' : furuiTouroku(p, r.code)) + uketotta(p) + '</div>');
     if (ok) sotoTojiru();
