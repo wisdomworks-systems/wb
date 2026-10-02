@@ -348,8 +348,10 @@
     if (aru(SHIZUKA, fn)) return;
     obi(esc(bun || furuiBun(fn)).replace(/\n/g, '<br>') + furuiGamen(), '#FFF4D6', true);
   }
-  var CHOKU_R = 'Supabase を直接読めませんでした（新しい画面には GAS の予備がありません）。少し待って、開き直してください。';
-  var CHOKU_W = 'Supabase に直接書けませんでした（新しい画面には GAS の予備がありません）。もう一度押してください。'
+
+
+  var CHOKU_R = 'Supabase から読めませんでした（回線が一時的に切れたのかもしれません）。';
+  var CHOKU_W = 'Supabase に保存できませんでした（回線が一時的に切れたのかもしれません）。もう一度押してください。'
     + '続くときは、いつもの画面（古い URL）で操作してください。';
   var R2_BUN = 'カレンダーを読む許可がまだありません。右下の枠のボタンを押してから、もう一度開いてください。';
 
