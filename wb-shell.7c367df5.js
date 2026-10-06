@@ -26,6 +26,7 @@
 
 
 
+
 (function () {
   'use strict';
   var CFG = window.WB_CFG || {};
@@ -304,6 +305,8 @@
             if (!Array.isArray(so.taskOrder) || !so.taskOrder.length) so.taskOrder = taskOrderOboe();
             links2 = so.links2 || null;
             if (so.naoseru === true && naoseru.indexOf(s.email) < 0) naoseru.push(s.email);
+
+            if (watashiKai === 1) setTimeout(function () { pushHajime(s); }, 3000);
             return { url: CFG.sbUrl, anon: CFG.anon, token: s.token, me: s.email, soe: so };
           }, function (e) {
             if (e && (e.status === 403 || /在籍している人ではありません/.test(e.sbMsg || ''))) {
@@ -521,6 +524,149 @@
       setTimeout(function () { cb(JSON.parse(JSON.stringify(o))); }, 0);
     } }
   };
+
+
+
+
+
+
+
+
+
+
+
+
+  var PUSH_IYA = 'WB_PUSH_IYA', PUSH_IOS = 'WB_PUSH_IOS';
+  function pushB64(s) {
+    var t = String(s).replace(/-/g, '+').replace(/_/g, '/');
+    t += '==='.slice((t.length + 3) % 4);
+    var b = atob(t), u = new Uint8Array(b.length);
+    for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+    return u;
+  }
+  function pushB64u(buf) {
+    var u = new Uint8Array(buf), s = '';
+    for (var i = 0; i < u.length; i++) s += String.fromCharCode(u[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function pushIos() { return /iPhone|iPad|iPod/.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+  function pushHome() { return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+  function pushDekiru() { return !!(CFG.vapid && window.isSecureContext && navigator.serviceWorker && window.PushManager && window.Notification); }
+  function pushYomu(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+  function pushKaku(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  function pushMado(title, msg, botan) {
+    var mae = document.getElementById('wbPushMado');
+    if (mae) mae.remove();
+    var bg = document.createElement('div');
+    bg.className = 'modal';
+    bg.id = 'wbPushMado';
+    bg.innerHTML = '<div class="mbox" style="width:min(400px,92vw)"><button class="mcancel" type="button">×</button>'
+      + '<h3>' + esc(title) + '</h3><p class="wamsg">' + esc(msg).replace(/\n/g, '<br>') + '</p>'
+      + '<div class="mbtns" style="margin-top:16px">'
+      + botan.map(function (b, i) { return '<button type="button" class="' + (b.omo ? 'mok' : 'mghost') + '" data-i="' + i + '">' + esc(b.na) + '</button>'; }).join('')
+      + '</div></div>';
+    document.body.appendChild(bg);
+    var tojiru = function () { try { document.body.removeChild(bg); } catch (e) {} };
+    bg.querySelector('.mcancel').onclick = function () { tojiru(); var b = botan.filter(function (x) { return x.batsu; })[0]; if (b && b.f) b.f(); };
+    Array.prototype.forEach.call(bg.querySelectorAll('[data-i]'), function (x) {
+      x.onclick = function () { var b = botan[Number(x.getAttribute('data-i'))]; tojiru(); if (b.f) b.f(); };
+    });
+
+    setTimeout(function () { var y = bg.querySelector('.mok'); if (y) y.focus(); }, 30);
+    return bg;
+  }
+
+  function pushAitara(f, kai) {
+    kai = kai || 0;
+    if (!document.querySelector('.modal')) return f();
+    if (kai < 12) setTimeout(function () { pushAitara(f, kai + 1); }, 5000);
+  }
+  function pushSaki(reg) {
+    return reg.pushManager.getSubscription().then(function (sub) {
+
+      if (sub && sub.options && sub.options.applicationServerKey && pushB64u(sub.options.applicationServerKey) !== CFG.vapid) {
+        return sub.unsubscribe().then(function () { return null; }, function () { return null; });
+      }
+      return sub;
+    }).then(function (sub) {
+      return sub || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushB64(CFG.vapid) });
+    });
+  }
+  function pushTouroku(s, reg) {
+    return pushSaki(reg).then(function (sub) {
+      var j = sub.toJSON ? sub.toJSON() : sub;
+      return rpc(s, 'wb_push_touroku', { p_endpoint: j.endpoint, p_p256dh: (j.keys || {}).p256dh, p_auth: (j.keys || {}).auth,
+        p_ua: String(navigator.userAgent || '').slice(0, 200) });
+    }).then(function (r) {
+      if (!r || r.ok !== true) throw new Error((r && r.riyuu) || 'touroku');
+      return r;
+    });
+  }
+  function pushTameshi(s) {
+    return rpc(s, 'wb_push_tameshi', {}).then(function (t) {
+      var bun = t && t.ok ? '試しの通知を送りました'
+        : t && t.riyuu === 'hayai' ? '試しの通知は1分に1回までです'
+        : '試しの通知を送れませんでした（' + ((t && t.riyuu) || '') + '）';
+      if (typeof window.toast === 'function') window.toast(bun);
+      else pushMado('試しの通知', bun, [{ na: 'OK', omo: true }]);
+    }, function (e) {
+      pushMado('試しの通知を送れませんでした', String((e && e.message) || e), [{ na: 'OK', omo: true }]);
+    });
+  }
+  function pushYurusu(s, reg) {
+
+    var p;
+    try { p = Notification.requestPermission(); } catch (e) { p = null; }
+    return Promise.resolve(p).then(function (k) {
+      k = k || Notification.permission;
+      if (k !== 'granted') {
+        pushMado('通知は届けません', 'あとで届けたくなったら、\n端末の設定で通知を許可してください。', [{ na: 'OK', omo: true }]);
+        return;
+      }
+      return pushTouroku(s, reg).then(function () {
+        pushMado('この端末に届くようになりました', '試しに1通送ると、1分ほどで届きます。', [
+          { na: '閉じる' },
+          { na: '試しに1通送る', omo: true, f: function () { pushTameshi(s); } }]);
+      });
+    }).catch(function (e) {
+      kiroku.push({ fn: 'push', michi: 'touroku-dame', ms: 0 });
+      pushMado('通知の登録ができませんでした', 'もう一度開き直すと、また聞きます。\n（' + String((e && e.message) || e) + '）', [{ na: 'OK', omo: true }]);
+    });
+  }
+  function pushHajime(s) {
+    if (CFG.mode !== 'real' || MIRU || SOTO || !CFG.vapid) return;
+    var iosSafari = pushIos() && !pushHome();
+    rpc(s, 'wb_push_jotai', {}).then(function (j) {
+
+      SHELL.push = (j && j.ok === true && j.shirushi) || 'off';
+      if (!j || j.ok !== true || j.shirushi !== 'on') return;
+      if (!pushDekiru() && !iosSafari) return;
+      if (!pushDekiru()) {
+
+        if (pushYomu(PUSH_IOS)) return;
+        pushAitara(function () {
+          pushKaku(PUSH_IOS, String(Date.now()));
+          pushMado('スマホに通知を届けるには',
+            'Safari の共有ボタンから「ホーム画面に追加」を選び、\nホーム画面の WorksBoard から開いてください。\n通知は、ホーム画面から開いたときだけ届きます。',
+            [{ na: 'OK', omo: true }]);
+        });
+        return;
+      }
+      return navigator.serviceWorker.register('wb-sw.js', { scope: './' }).then(function (reg) {
+        if (Notification.permission === 'granted') return pushTouroku(s, reg);
+        if (Notification.permission !== 'default') return;
+        var iya = Number(pushYomu(PUSH_IYA)) || 0;
+        if (iya && Date.now() - iya < 14 * 864e5) return;
+        var iyada = function () { pushKaku(PUSH_IYA, String(Date.now())); };
+        pushAitara(function () {
+          pushMado('この端末に通知を届けますか？',
+            '予定の終わりやお昼、終業予定時刻に、\nこの端末へお知らせします。\nWorksBoard を閉じていても届きます。',
+            [{ na: '今はしない', f: iyada, batsu: true }, { na: '届ける', omo: true, f: function () { pushYurusu(s, reg); } }]);
+        });
+      });
+    }).catch(function () { kiroku.push({ fn: 'push', michi: 'dame', ms: 0 }); });
+  }
 
 
   var mitaAt = 0;
