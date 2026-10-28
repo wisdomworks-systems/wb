@@ -82,7 +82,10 @@
   function obi(html, iro, tojiru) {
     html = kae(html);
 
-    if (SOTO) return sotoKaku(iro === '#FDE2E1' ? '#FEF3F2' : '#FFF4D6', '<div style="font-size:14px;line-height:1.7">' + html + '</div>');
+    if (SOTO) {
+      sotoShirase({ dankai: 'obi', msg: String(html).replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').slice(0, 200) });
+      return sotoKaku(iro === '#FDE2E1' ? '#FEF3F2' : '#FFF4D6', '<div style="font-size:14px;line-height:1.7">' + html + '</div>');
+    }
     var d = document.getElementById('wbShellObi');
     if (!d) {
       d = document.createElement('div');
@@ -725,6 +728,35 @@
 
 
   var SOTO_MS = CFG.sotoTojiruMs || 4000;
+
+
+
+
+
+
+
+
+
+  function sotoShirase(o) {
+    try { var op = window.opener; if (op) op.postMessage(Object.assign({ wbAdd: 1 }, o), '*'); } catch (e) {}
+  }
+  var SOTO_DANKAI = '', SOTO_T0 = 0, SOTO_MI = null;
+
+  function sotoMimamoru() {
+    clearInterval(SOTO_MI);
+    SOTO_T0 = Date.now();
+    SOTO_MI = setInterval(function () {
+      var sec = Math.round((Date.now() - SOTO_T0) / 1000);
+      if (sec < 8) return;
+      var d = document.getElementById('wbSotoMatsu');
+      if (d) {
+        d.textContent = SOTO_DANKAI === 'server'
+          ? 'サーバの返事を待っています（' + sec + '秒）。1分たっても変わらないときは、この窓を閉じて、WorksBoard でカードができているか確かめてください。'
+          : 'ログインの確かめで止まっています（' + sec + '秒）。この窓を閉じて、もう一度押してください。続くときは、WorksBoard を開き直してから押してください。';
+      }
+      if (sec % 5 === 3) sotoShirase({ dankai: 'matsu', doko: SOTO_DANKAI || 'login', sec: sec });
+    }, 1000);
+  }
   function sotoKaku(iro, html) {
     var d = document.getElementById('wbSoto');
     if (!d) {
@@ -763,7 +795,9 @@
   }
   function sotoYobu(p, nidome) {
     var t0 = Date.now();
+    SOTO_DANKAI = 'login';
     return loginMade().then(function (s) {
+      SOTO_DANKAI = 'server';
       return fetch(CFG.wbApi, {
         method: 'POST',
         headers: { 'apikey': CFG.anon, 'Authorization': 'Bearer ' + s.token, 'Content-Type': 'application/json' },
@@ -795,7 +829,9 @@
   }
   function sotoKekka(r, p) {
     r = r || {};
-    if (r.kekka === 'erabu') return sotoErabu(r, p);
+    clearInterval(SOTO_MI);
+    if (r.kekka === 'erabu') { sotoShirase({ dankai: 'erabu' }); return sotoErabu(r, p); }
+    sotoShirase({ dankai: 'kekka', kekka: String(r.kekka || 'dame'), msg: kae(r.msg || ''), id: String(r.id || '') });
     var ok = r.kekka === 'touroku' || r.kekka === 'sudeni';
     sotoKaku(ok ? '#F2FAF6' : '#FEF3F2',
       '<div style="text-align:center"><div id="wbSotoBun" style="font-size:19px;font-weight:700;color:' + (ok ? '#0E7A55' : '#B42318') + '">'
@@ -834,7 +870,9 @@
   }
   function sotoTouroku(p) {
     sotoKaku('#F7F8FA', '<div style="text-align:center;font-size:15px">WorksBoard に登録しています…'
-      + '<div style="font-size:12px;color:#6B747E;margin-top:8px">' + esc(p.add || '') + '</div></div>');
+      + '<div style="font-size:12px;color:#6B747E;margin-top:8px">' + esc(p.add || '') + '</div>'
+      + '<div id="wbSotoMatsu" style="font-size:12px;color:#B54708;margin-top:12px;line-height:1.7"></div></div>');
+    sotoMimamoru();
     return sotoYobu(p).then(function (r) { sotoKekka(r, p); },
       function (e) { sotoKekka({ kekka: 'kotowari', msg: String((e && e.message) || e) }, p); });
   }
@@ -851,6 +889,7 @@
         + '<div style="font-size:12px;color:#98A2AD;margin-top:16px;line-height:1.8">新しい WorksBoard（Supabase）です。<br>'
         + 'この画面が出れば、送り先は新しい WorksBoard になっています。</div></div>');
     } else {
+      sotoShirase({ dankai: 'hiraita' });
       sotoTouroku(JSON.parse(JSON.stringify(loc0.parameter)));
     }
   }
